@@ -2,88 +2,505 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Meine AR App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mein CO2-Fußabdruck - KlimaSchule</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js für Diagramme -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome für Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- A-Frame Bibliothek (Basis für 3D im Web) -->
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    
-    <!-- AR.js Bibliothek (Für das Kamera-Tracking) -->
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4', 100: '#dcfce7', 500: '#22c55e',
+                            600: '#16a34a', 700: '#15803d', 900: '#14532d',https://umweltrechner.vercel.app/
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; /* Verhindert Scrollen, da die Kamera den ganzen Bildschirm füllen soll */
-            font-family: sans-serif; 
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .ui-overlay {
-            position: absolute;
-            bottom: 30px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            z-index: 10;
-            pointer-events: none;
+
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
         }
-        .ui-text {
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 25px;
-            display: inline-block;
-            font-size: 16px;
-            backdrop-filter: blur(4px);
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Custom Radio Buttons */
+        .custom-radio:checked + div {
+            border-color: #22c55e;
+            background-color: #f0fdf4;
+        }
+        .custom-radio:checked + div .radio-icon {
+            color: #16a34a;
         }
     </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans selection:bg-brand-200">
 
-    <!-- Benutzeroberfläche -->
-    <div class="ui-overlay">
-        <div class="ui-text" id="status-text">Kamera auf den Tracker richten 📷</div>
+    <!-- Header -->
+    <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shadow-sm z-10 sticky top-0">
+        <div class="flex items-center">
+            <i class="fa-solid fa-earth-europe text-brand-500 text-xl mr-3"></i>
+            <span class="font-bold text-xl tracking-tight text-slate-900">KlimaSchule</span>
+        </div>
+        <div class="flex items-center space-x-3">
+            <div class="flex items-center px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-semibold border border-green-100">
+                <span class="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
+                Server Online
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 w-full max-w-5xl mx-auto p-4 md:p-8 flex flex-col justify-center min-h-[calc(100vh-4rem)]">
+        
+        <!-- ================= INPUT VIEW ================= -->
+        <div id="view-input" class="w-full fade-in">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">Dein Schul-Fußabdruck</h1>
+                <p class="text-slate-500">Fülle das Formular aus. Deine Daten werden sicher an die Schul-Datenbank übermittelt.</p>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <form id="student-form" class="p-6 md:p-8 space-y-8">
+                    
+                    <!-- 1. Person -->
+                    <div class="pb-6 border-b border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">1. Wer bist du?</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Vorname (Optional)</label>
+                                <input type="text" id="in-name" placeholder="z.B. Jona" class="w-full rounded-lg border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 p-3 border">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Klasse</label>
+                                <select id="in-class" class="w-full rounded-lg border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 p-3 border bg-white" required>
+                                    <option value="" disabled selected>Bitte wählen...</option>
+                                    <option value="5-7">Klasse 5 - 7</option>
+                                    <option value="8-10">Klasse 8 - 10</option>
+                                    <option value="Oberstufe">Oberstufe</option>
+                                    <option value="Lehrer">Lehrer / Personal</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Schulweg -->
+                    <div class="pb-6 border-b border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">2. Dein Schulweg</h3>
+                        <label class="block text-sm font-medium text-slate-700 mb-3">Wie kommst du meistens zur Schule?</label>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="transport" value="0" class="custom-radio peer sr-only" required>
+                                <div class="p-4 rounded-xl border-2 border-slate-100 hover:border-slate-200 transition-all text-center">
+                                    <i class="fa-solid fa-person-biking text-2xl text-slate-400 radio-icon mb-2 block"></i>
+                                    <span class="font-medium text-slate-700">Fahrrad / Zu Fuß</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="transport" value="0.08" class="custom-radio peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-100 hover:border-slate-200 transition-all text-center">
+                                    <i class="fa-solid fa-bus text-2xl text-slate-400 radio-icon mb-2 block"></i>
+                                    <span class="font-medium text-slate-700">Bus / Bahn</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="transport" value="0.20" class="custom-radio peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-100 hover:border-slate-200 transition-all text-center">
+                                    <i class="fa-solid fa-car text-2xl text-slate-400 radio-icon mb-2 block"></i>
+                                    <span class="font-medium text-slate-700">Auto / Elterntaxi</span>
+                                </div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Wie viele Kilometer ist ein Weg?</label>
+                            <div class="relative">
+                                <input type="number" id="in-distance" placeholder="z.B. 5" min="0" step="0.1" class="w-full rounded-lg border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 p-3 border pr-12" required>
+                                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-400 font-medium">km</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Ernährung -->
+                    <div class="pb-6 border-b border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">3. Schulverpflegung</h3>
+                        <label class="block text-sm font-medium text-slate-700 mb-3">Was isst du in der Pause / Mensa?</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="food" value="1.5" class="custom-radio peer sr-only" required>
+                                <div class="p-4 rounded-xl border-2 border-slate-100 flex items-center">
+                                    <i class="fa-solid fa-drumstick-bite text-xl text-slate-400 radio-icon w-8 text-center mr-2"></i>
+                                    <span class="font-medium text-slate-700">Oft Fleisch / Wurst</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="food" value="0.6" class="custom-radio peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-100 flex items-center">
+                                    <i class="fa-solid fa-leaf text-xl text-slate-400 radio-icon w-8 text-center mr-2"></i>
+                                    <span class="font-medium text-slate-700">Vegetarisch</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="food" value="0.4" class="custom-radio peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-100 flex items-center">
+                                    <i class="fa-solid fa-seedling text-xl text-slate-400 radio-icon w-8 text-center mr-2"></i>
+                                    <span class="font-medium text-slate-700">Rein Vegan</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer relative">
+                                <input type="radio" name="food" value="0.2" class="custom-radio peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-100 flex items-center">
+                                    <i class="fa-solid fa-bread-slice text-xl text-slate-400 radio-icon w-8 text-center mr-2"></i>
+                                    <span class="font-medium text-slate-700">Nur eigenes Brot</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 4. Ausstattung -->
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">4. Arbeitsmaterial</h3>
+                        <label class="block text-sm font-medium text-slate-700 mb-3">Wie arbeitest du im Unterricht?</label>
+                        <select id="in-material" class="w-full rounded-lg border-slate-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 p-3 border bg-white" required>
+                            <option value="" disabled selected>Bitte wählen...</option>
+                            <option value="50">Viel Papier & viele Hefte (ca. 50 kg CO2/Jahr)</option>
+                            <option value="30">Gemischt (Papier & Digital) (ca. 30 kg CO2/Jahr)</option>
+                            <option value="15">Fast nur Digital (Tablet/Laptop) (ca. 15 kg CO2/Jahr)</option>
+                        </select>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="pt-4">
+                        <button type="submit" id="btn-submit" class="w-full bg-slate-900 text-white px-6 py-4 rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors flex items-center justify-center shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 duration-200">
+                            <span id="btn-text">Berechnen & an Datenbank senden</span>
+                            <div id="btn-spinner" class="spinner ml-3 hidden !border-t-brand-500 !border-slate-300"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ================= LOADING VIEW ================= -->
+        <div id="view-loading" class="w-full hidden flex-col items-center justify-center py-20">
+            <div class="relative w-24 h-24 mb-8">
+                <div class="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-brand-500 rounded-full border-t-transparent animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fa-solid fa-server text-2xl text-brand-500"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Übertrage Daten an Server...</h2>
+            <p class="text-slate-500 animate-pulse">Persönlicher Fußabdruck wird berechnet.</p>
+            
+            <!-- Fake Terminal Output to look professional -->
+            <div class="mt-8 bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-xs w-full max-w-md text-left overflow-hidden h-24 relative shadow-inner">
+                <div id="terminal-text" class="absolute bottom-4 left-4 flex flex-col space-y-1">
+                    <div>> Initialisiere sichere Verbindung...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= RESULT VIEW ================= -->
+        <div id="view-result" class="w-full hidden">
+            <div class="flex items-center justify-between mb-6">
+                <button onclick="app.reset()" class="text-slate-500 hover:text-slate-800 font-medium flex items-center transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> Zurück
+                </button>
+                <div class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold flex items-center">
+                    <i class="fa-solid fa-check-circle mr-1"></i> Gespeichert
+                </div>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- Header -->
+                <div class="bg-slate-900 text-white p-8 text-center relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=')]"></div>
+                    <h2 class="text-slate-400 font-medium mb-2 uppercase tracking-widest text-sm relative z-10">Dein Schul-Jahreswert</h2>
+                    <div class="flex items-end justify-center relative z-10">
+                        <span class="text-6xl md:text-7xl font-extrabold tracking-tight" id="res-total">0</span>
+                        <span class="text-2xl ml-2 font-medium text-slate-400 mb-2">kg CO₂e</span>
+                    </div>
+                    <p class="mt-4 text-brand-400 font-medium text-lg relative z-10" id="res-greeting">Hallo!</p>
+                </div>
+
+                <!-- Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 p-6 md:p-8 gap-8">
+                    
+                    <!-- Chart -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Deine Emissionen im Detail</h3>
+                        <div class="relative h-64 w-full">
+                            <canvas id="resultChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Details & Comparison -->
+                    <div class="flex flex-col justify-center space-y-6">
+                        
+                        <!-- Comparison Card -->
+                        <div class="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                            <div class="flex items-center mb-2">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center mr-3" id="comp-icon-bg">
+                                    <i class="fa-solid fa-scale-balanced text-lg" id="comp-icon"></i>
+                                </div>
+                                <h4 class="font-bold text-slate-800">Vergleich zum Durchschnitt</h4>
+                            </div>
+                            <p class="text-slate-600 text-sm" id="res-comparison">Ein durchschnittlicher Schüler verursacht ca. 450 kg CO2 pro Jahr. Lade deine Daten...</p>
+                        </div>
+
+                        <!-- Bäume -->
+                        <div class="bg-brand-50 rounded-2xl p-5 border border-brand-100">
+                            <div class="flex items-center">
+                                <i class="fa-solid fa-tree text-brand-500 text-3xl mr-4"></i>
+                                <div>
+                                    <h4 class="font-bold text-brand-900">Kompensation</h4>
+                                    <p class="text-brand-700 text-sm">Um deinen Fußabdruck auszugleichen, müssten <strong id="res-trees" class="text-xl mx-1">0</strong> Bäume ein Jahr lang wachsen.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl transform transition-all duration-300 translate-y-20 opacity-0 z-50 flex items-center border border-slate-700">
+        <i class="fa-solid fa-server text-brand-400 text-xl mr-3"></i>
+        <div>
+            <h4 class="font-semibold text-sm">Datenbank-Sync erfolgreich</h4>
+            <p class="text-xs text-slate-400">Deine Werte fließen nun in die Schul-Gesamtstatistik ein.</p>
+        </div>
     </div>
 
-    <!-- Die AR Szene -->
-    <a-scene
-        vr-mode-ui="enabled: false;"
-        renderer="logarithmicDepthBuffer: true; colorManagement: true;"
-        embedded
-        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
-
-        <!-- Hier werden unsere Dateien vorgeladen -->
-        <a-assets>
-            <a-asset-item id="mein-3d-modell" src="https://jn.topdf.de/HotBws.glb"></a-asset-item>
-        </a-assets>
-
-        <!-- Der Tracker / Marker -->
-        <!-- Wichtig: AR.js erwartet hier standardmäßig eine .patt (Pattern) Datei -->
-        <a-marker type="pattern" url="https://jn.topdf.de/target">
-            
-            <!-- Das 3D-Modell, das angezeigt wird, wenn der Tracker erkannt wird -->
-            <!-- Du kannst 'scale' anpassen, falls dein Modell am Anfang zu groß oder zu klein ist (z.B. "0.5 0.5 0.5") -->
-            <a-entity
-                gltf-model="#mein-3d-modell"
-                scale="1 1 1"
-                position="0 0 0"
-                rotation="0 0 0">
-            </a-entity>
-            
-        </a-marker>
-
-        <!-- Die Kamera -->
-        <a-entity camera></a-entity>
-        
-    </a-scene>
-
     <script>
-        // Warnung anzeigen, wenn die App in meinem Vorschau-Fenster (iFrame) läuft
-        window.addEventListener('load', () => {
-            if (window.self !== window.top) {
-                const statusText = document.getElementById('status-text');
-                statusText.innerHTML = "⚠️ Kamera in der Vorschau blockiert. Bitte lade die Datei auf deinen Server hoch!";
-                statusText.style.backgroundColor = "rgba(220, 53, 69, 0.9)";
+        const app = {
+            chartInstance: null,
+            schoolDaysPerYear: 200, // Annahme: 200 Schultage
+
+            init() {
+                document.getElementById('student-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.processForm();
+                });
+            },
+
+            async processForm() {
+                // UI: Button loading
+                const btn = document.getElementById('btn-submit');
+                const btnText = document.getElementById('btn-text');
+                const spinner = document.getElementById('btn-spinner');
+                
+                btnText.innerText = 'Verbinde mit Server...';
+                spinner.classList.remove('hidden');
+                btn.disabled = true;
+
+                // Daten auslesen
+                const name = document.getElementById('in-name').value.trim() || 'Schüler/in';
+                const schulklasse = document.getElementById('in-class').value;
+                
+                // Radio Buttons
+                const transportFactor = parseFloat(document.querySelector('input[name="transport"]:checked').value);
+                const foodFactor = parseFloat(document.querySelector('input[name="food"]:checked').value);
+                
+                const distance = parseFloat(document.getElementById('in-distance').value);
+                const materialCO2 = parseFloat(document.getElementById('in-material').value);
+
+                // Berechnungen
+                // Mobilität: Distanz * 2 (Hin/Zurück) * 200 Tage * Faktor
+                const mobilityCO2 = distance * 2 * this.schoolDaysPerYear * transportFactor;
+                
+                // Ernährung: Faktor (kg pro Tag) * 200 Tage
+                const foodCO2 = foodFactor * this.schoolDaysPerYear;
+                
+                // Strom/Heizung Schulgebäude (Pauschalwert pro Kopf, ca. 150kg)
+                const buildingCO2 = 150; 
+
+                const totalCO2 = Math.round(mobilityCO2 + foodCO2 + materialCO2 + buildingCO2);
+
+                const studentData = {
+                    name, schulklasse, totalCO2,
+                    breakdown: {
+                        mobility: Math.round(mobilityCO2),
+                        food: Math.round(foodCO2),
+                        material: Math.round(materialCO2),
+                        building: buildingCO2
+                    }
+                };
+
+                // Server-Simulation starten
+                await this.simulateServerUpload(studentData);
+            },
+
+            async simulateServerUpload(data) {
+                // View wechseln
+                document.getElementById('view-input').classList.add('hidden');
+                document.getElementById('view-loading').classList.remove('hidden');
+                document.getElementById('view-loading').classList.add('flex');
+
+                const terminal = document.getElementById('terminal-text');
+                const messages = [
+                    "> Authentifiziere bei Schul-Datenbank...",
+                    "> SSL Verbindung aufgebaut (Port 443)",
+                    "> Sende Payload (CO2_Student_Data)...",
+                    "> Berechne Schul-Gesamtdurchschnitt neu...",
+                    "> Speichern erfolgreich. Status 200 OK."
+                ];
+
+                // Fake Terminal Animation
+                for (let i = 0; i < messages.length; i++) {
+                    await new Promise(r => setTimeout(r, 600));
+                    const div = document.createElement('div');
+                    div.innerText = messages[i];
+                    terminal.appendChild(div);
+                }
+                
+                await new Promise(r => setTimeout(r, 800)); // Kurze Pause am Ende
+
+                this.showResult(data);
+            },
+
+            showResult(data) {
+                // Views umschalten
+                document.getElementById('view-loading').classList.add('hidden');
+                document.getElementById('view-loading').classList.remove('flex');
+                document.getElementById('view-result').classList.remove('hidden');
+                document.getElementById('view-result').classList.add('fade-in');
+
+                // Toast zeigen
+                this.showToast();
+
+                // Daten eintragen
+                document.getElementById('res-greeting').innerText = `${data.name}, dein Fußabdruck ist berechnet!`;
+                this.animateValue('res-total', 0, data.totalCO2, 1500);
+
+                // Bäume (1 Baum = ca. 10kg pro Jahr)
+                const trees = Math.ceil(data.totalCO2 / 10);
+                this.animateValue('res-trees', 0, trees, 1500);
+
+                // Vergleichstext
+                const avg = 450;
+                const diff = Math.round(Math.abs(data.totalCO2 - avg));
+                const compText = document.getElementById('res-comparison');
+                const compIconBg = document.getElementById('comp-icon-bg');
+                const compIcon = document.getElementById('comp-icon');
+
+                if (data.totalCO2 < avg) {
+                    compText.innerHTML = `Klasse! Du bist <strong>${diff} kg unter</strong> dem Schul-Durchschnitt (${avg} kg). Weiter so!`;
+                    compIconBg.className = "w-10 h-10 rounded-full flex items-center justify-center mr-3 bg-green-100 text-green-600";
+                    compIcon.className = "fa-solid fa-arrow-trend-down text-lg";
+                } else if (data.totalCO2 > avg) {
+                    compText.innerHTML = `Du liegst <strong>${diff} kg über</strong> dem Schul-Durchschnitt (${avg} kg). Schau im Diagramm, wo du noch einsparen kannst.`;
+                    compIconBg.className = "w-10 h-10 rounded-full flex items-center justify-center mr-3 bg-red-100 text-red-600";
+                    compIcon.className = "fa-solid fa-arrow-trend-up text-lg";
+                } else {
+                    compText.innerHTML = `Du liegst genau im Durchschnitt von ${avg} kg CO2.`;
+                    compIconBg.className = "w-10 h-10 rounded-full flex items-center justify-center mr-3 bg-blue-100 text-blue-600";
+                    compIcon.className = "fa-solid fa-equals text-lg";
+                }
+
+                this.renderChart(data.breakdown);
+            },
+
+            renderChart(bd) {
+                if (this.chartInstance) this.chartInstance.destroy();
+
+                const ctx = document.getElementById('resultChart').getContext('2d');
+                this.chartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Schulweg', 'Ernährung (Pause)', 'Materialien', 'Gebäudeanteil'],
+                        datasets: [{
+                            data: [bd.mobility, bd.food, bd.material, bd.building],
+                            backgroundColor: ['#3b82f6', '#f97316', '#a855f7', '#cbd5e1'],
+                            borderWidth: 0,
+                            hoverOffset: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: {family: 'Inter'} } }
+                        },
+                        cutout: '60%',
+                        animation: { animateScale: true, animateRotate: true, duration: 2000 }
+                    }
+                });
+            },
+
+            reset() {
+                // Formular reset
+                document.getElementById('student-form').reset();
+                
+                // Button reset
+                const btn = document.getElementById('btn-submit');
+                document.getElementById('btn-text').innerText = 'Berechnen & an Datenbank senden';
+                document.getElementById('btn-spinner').classList.add('hidden');
+                btn.disabled = false;
+
+                // Terminal leeren
+                document.getElementById('terminal-text').innerHTML = '<div>> Initialisiere sichere Verbindung...</div>';
+
+                // Views
+                document.getElementById('view-result').classList.add('hidden');
+                document.getElementById('view-result').classList.remove('fade-in');
+                document.getElementById('view-input').classList.remove('hidden');
+            },
+
+            showToast() {
+                const toast = document.getElementById('toast');
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 4000);
+            },
+
+            animateValue(id, start, end, duration) {
+                const obj = document.getElementById(id);
+                let startTimestamp = null;
+                const step = (timestamp) => {
+                    if (!startTimestamp) startTimestamp = timestamp;
+                    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                    const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+                    const current = Math.floor(start + (end - start) * easeOutQuart);
+                    
+                    obj.innerHTML = current.toLocaleString('de-DE');
+                    
+                    if (progress < 1) window.requestAnimationFrame(step);
+                    else obj.innerHTML = end.toLocaleString('de-DE'); // Endwert exakt setzen
+                };
+                window.requestAnimationFrame(step);
             }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
         });
     </script>
 </body>
